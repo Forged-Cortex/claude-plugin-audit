@@ -60,9 +60,45 @@ bunx claude-plugin-audit
 
 ---
 
+## Understanding the Output
+
+The tool uses five severity levels designed to be readable even if you're not a security engineer:
+
+| Level | What It Means | Visible by Default |
+|-------|--------------|-------------------|
+| **CRITICAL** | Something is actively wrong. Data may be leaving your machine, or a plugin is injecting behavior into Claude without your knowledge. | Yes |
+| **MITIGATED** | This was critical, but you've already handled it. An environment variable is set, a preference file says "disabled," or the plugin is turned off. The code is still there, but it's not running. | Yes |
+| **WARNING** | Something you should evaluate. Could be a real problem or could be fine depending on the plugin's purpose. The tool gives you context to decide. | Yes |
+| **NOTICE** | Noted for the record but almost certainly benign. Version checks, tool detection, config file reads, designed plugin mechanisms operating normally. | `--verbose` only |
+| **INFO** | Background detail about normal plugin mechanics. | `--verbose` only |
+
+By default, you only see CRITICAL, MITIGATED, and WARNING. Everything that shows up in the default view is something you should actually look at.
+
+### Contextual Notes
+
+Findings include contextual notes that help you evaluate them:
+
+- A `fetch()` call in a Telegram plugin targeting `api.telegram.org` will say: *"This fetch() appears to call the Telegram Bot API, which is expected behavior for this plugin."*
+- A child process spawning `which dot` will say: *"This checks whether a CLI tool is installed on the system. Generally benign."*
+- Data capture in a file with no network calls will say: *"No outbound network calls detected in this file. The captured data appears to stay local."*
+
+The tool doesn't just flag patterns. It tells you what those patterns probably mean.
+
+### Mitigation Detection
+
+The tool checks whether you've already addressed critical findings:
+
+- **Telemetry opt-out env vars**: Scans plugin source for variables like `VERCEL_PLUGIN_TELEMETRY`, then checks your shell config and current environment. If you've set the opt-out, the finding shows `MITIGATED` instead of `CRITICAL`.
+- **Preference files**: Checks `~/.claude/*telemetry-preference*` files. If they say "disabled," related consent-injection findings are marked mitigated.
+- **Disabled plugins**: If a plugin is disabled in `settings.json`, all its findings are mitigated because no hooks will fire.
+
+The summary table reflects this. A fully remediated system shows `ACTIVE: 0`.
+
+---
+
 ## What It Detects
 
-The tool scans plugin source code and hook configuration for six categories of security-relevant patterns. Each finding includes the file, line number, the matching code, and a recommendation for what to do about it.
+The tool scans plugin source code and hook configuration for six categories of security-relevant patterns. Each finding includes the file, line number, one line of context above and below the match, and a recommendation.
 
 ### Telemetry (TEL-001 through TEL-005)
 
@@ -73,7 +109,7 @@ Outbound network requests that can send data to external servers.
 | TEL-001 | CRITICAL | `fetch()` calls in hook scripts |
 | TEL-002 | CRITICAL | Node.js `http.request()` / `https.request()` |
 | TEL-003 | CRITICAL | Shell commands executing `curl` or `wget` |
-| TEL-004 | WARNING | Hardcoded external URLs (not localhost) |
+| TEL-004 | WARNING/NOTICE | Hardcoded external URLs (WARNING for telemetry endpoints, NOTICE for known APIs) |
 | TEL-005 | CRITICAL | Python `requests`, `urllib`, `httpx` calls |
 
 ### Data Capture (CAP-001 through CAP-004)
@@ -83,9 +119,9 @@ Code that extracts sensitive data from the hook payload.
 | ID | Severity | What It Catches |
 |----|----------|----------------|
 | CAP-001 | INFO | Reads stdin (normal hook behavior, flagged for context) |
-| CAP-002 | WARNING | Extracts user prompts, bash commands, or tool input |
+| CAP-002 | WARNING/NOTICE | Extracts user prompts or bash commands (WARNING if same file has network calls, NOTICE if local only) |
 | CAP-003 | CRITICAL | Accesses sensitive env vars (API keys, tokens, credentials) |
-| CAP-004 | WARNING | Reads files outside the plugin's own directory |
+| CAP-004 | NOTICE | Reads files outside the plugin's own directory |
 
 ### Behavioral Injection (INJ-001 through INJ-004)
 
@@ -93,7 +129,7 @@ Prompt injection patterns where the plugin manipulates Claude's behavior.
 
 | ID | Severity | What It Catches |
 |----|----------|----------------|
-| INJ-001 | WARNING | Sets `additionalContext` to inject text into Claude's context |
+| INJ-001 | NOTICE | Sets `additionalContext` to inject text into Claude's context (designed mechanism, consolidated to one per plugin) |
 | INJ-002 | CRITICAL | Instructs Claude to use specific tools (AskUserQuestion, Bash) |
 | INJ-003 | CRITICAL | Injected text contains shell commands targeting the home directory |
 | INJ-004 | WARNING | Manipulative language ("After responding...", "Do not mention...") |
@@ -117,8 +153,8 @@ Persistent state written outside the plugin's own cache directory.
 |----|----------|----------------|
 | FS-001 | WARNING | Writes files to `~/.claude/` outside the plugin cache |
 | FS-002 | WARNING | Generates persistent UUIDs or device identifiers |
-| FS-003 | INFO | Uses the system temp directory |
-| FS-004 | INFO | Appends to files (logging or audit trails) |
+| FS-003 | NOTICE | Uses the system temp directory |
+| FS-004 | NOTICE | Appends to files (logging or audit trails) |
 
 ### Environment (ENV-001 through ENV-004)
 
@@ -126,22 +162,10 @@ Process and environment manipulation.
 
 | ID | Severity | What It Catches |
 |----|----------|----------------|
-| ENV-001 | WARNING | Writes to `CLAUDE_ENV_FILE` (persists env vars across hooks) |
-| ENV-002 | WARNING | Spawns child processes (`exec`, `spawn`, `subprocess`) |
-| ENV-003 | WARNING | Modifies `process.env` directly |
+| ENV-001 | NOTICE | Writes to `CLAUDE_ENV_FILE` (designed persistence mechanism) |
+| ENV-002 | WARNING/NOTICE | Spawns child processes (WARNING if unrecognized, NOTICE for benign commands like version checks) |
+| ENV-003 | NOTICE | Modifies `process.env` directly |
 | ENV-004 | WARNING | Python `subprocess` execution |
-
----
-
-## Understanding Findings
-
-**CRITICAL** means the pattern can exfiltrate data, inject behavior into Claude, or modify your system on behalf of the plugin. Review these immediately.
-
-**WARNING** means the pattern is suspicious in context but may be legitimate depending on what the plugin does. A Telegram plugin calling `api.telegram.org` is expected. A deployment plugin capturing your bash commands is not.
-
-**INFO** means the pattern is noted for completeness but is generally normal plugin behavior. Hidden by default; use `--verbose` to see them.
-
-The tool surfaces patterns for human review. It does not make automated trust decisions. Every finding includes the source file, line number, and the actual code so you can evaluate it yourself.
 
 ---
 
@@ -161,7 +185,29 @@ Scans plugin source code for environment variables that control telemetry (like 
 **4. Plugin disable** (defaults to no)
 For plugins with CRITICAL findings, asks per-plugin whether to disable them in `~/.claude/settings.json`. Defaults to "no" because disabling a plugin removes its skills and functionality, not just its telemetry. Only disable if you genuinely don't need the plugin.
 
-The principle: safe, reversible actions default to "yes." Actions that could break your workflow default to "no." Nothing runs without confirmation.
+The principle: safe, reversible actions default to "yes." Actions that could break your workflow default to "no." Nothing runs without your confirmation.
+
+---
+
+## Ignore File (`.cpauditignore`)
+
+Suppress known-good findings with a `.cpauditignore` file at `~/.claude/.cpauditignore` or `~/.cpauditignore`:
+
+```
+# Ignore Telegram API calls (expected behavior)
+TEL-001:telegram
+
+# Ignore a specific finding for all plugins
+FS-003:*
+
+# Ignore everything for a specific plugin
+*:my-trusted-plugin
+
+# Ignore a finding in a specific file
+ENV-002:superpowers:render-graphs.js
+```
+
+Format: `FINDING-ID:plugin-name:file-path` (use `*` for wildcards).
 
 ---
 
@@ -171,20 +217,17 @@ The principle: safe, reversible actions default to "yes." Actions that could bre
 Usage: cpa [options] [plugin-name...]
 
 Options:
-  --fix               Remediate findings (delete tracking, set opt-outs)
+  --fix               Find issues and fix them (interactive remediation)
   --json              Machine-readable JSON output
-  --verbose, -V       Include INFO-level findings (hidden by default)
+  --verbose, -V       Show all findings including NOTICE and INFO
   --plugin-dir <dir>  Override plugin cache directory
   --no-color          Disable ANSI colors
   --help, -h          Show this help message
   --version, -v       Show version
 
-Examples:
-  npx claude-plugin-audit                  Audit all installed plugins
-  npx claude-plugin-audit vercel           Audit only the Vercel plugin
-  npx claude-plugin-audit --fix            Audit and remediate
-  npx claude-plugin-audit --json           JSON output for CI
-  npx claude-plugin-audit --json | jq '.plugins[].findings[] | select(.severity == "critical")'
+Exit Codes:
+  0                   No unmitigated critical findings
+  1                   Unmitigated critical findings present
 ```
 
 ---
@@ -195,14 +238,14 @@ The `--json` flag produces structured output suitable for CI pipelines, dashboar
 
 ```json
 {
-  "version": "1.1.1",
-  "timestamp": "2026-04-10T14:30:00.000Z",
+  "version": "1.4.0",
+  "timestamp": "2026-04-10T15:30:00.000Z",
   "summary": {
     "pluginsScanned": 12,
-    "sourceFilesScanned": 88,
+    "sourceFilesScanned": 81,
     "criticalCount": 8,
-    "warningCount": 64,
-    "infoCount": 37
+    "warningCount": 15,
+    "infoCount": 21
   },
   "plugins": [
     {
@@ -211,7 +254,6 @@ The `--json` flag produces structured output suitable for CI pipelines, dashboar
       "marketplace": "claude-plugins-official",
       "enabled": true,
       "hookEvents": ["SessionStart", "UserPromptSubmit", "PostToolUse"],
-      "sourceFilesScanned": 81,
       "findings": [
         {
           "id": "TEL-001",
@@ -221,8 +263,9 @@ The `--json` flag produces structured output suitable for CI pipelines, dashboar
           "file": "hooks/telemetry.mjs",
           "line": 23,
           "match": "await fetch(BRIDGE_ENDPOINT, {",
-          "description": "Hook scripts with fetch() can send data to external servers.",
-          "recommendation": "Identify the destination URL and what data is included in the request body."
+          "mitigated": true,
+          "mitigationReason": "VERCEL_PLUGIN_TELEMETRY=off is set in your ~/.zshrc",
+          "note": "..."
         }
       ]
     }
@@ -230,7 +273,7 @@ The `--json` flag produces structured output suitable for CI pipelines, dashboar
 }
 ```
 
-The process exits with code 1 if any CRITICAL findings are present, making it usable as a CI gate.
+The process exits with code 1 if any unmitigated CRITICAL findings are present, making it usable as a CI gate.
 
 ---
 
@@ -238,11 +281,12 @@ The process exits with code 1 if any CRITICAL findings are present, making it us
 
 1. Reads `~/.claude/plugins/installed_plugins.json` to discover all installed plugins
 2. For each plugin, parses `hooks/hooks.json` for structural analysis: matcher breadth, event coverage, telemetry naming patterns
-3. Enumerates source files (`.mjs`, `.js`, `.ts`, `.py`) excluding `node_modules/`, test fixtures, and vendored libraries
+3. Enumerates source files (`.mjs`, `.js`, `.ts`, `.py`) excluding `node_modules/`, test files, and vendored libraries
 4. Runs 23 regex-based detection patterns against each source file with line-number tracking
-5. Cross-references findings: if a file has both network calls AND stdin/prompt reading, the data capture finding is elevated
-6. Deduplicates between compiled `.mjs` and TypeScript `.mts` sources to avoid double-reporting
-7. Outputs findings sorted by severity with per-finding recommendations
+5. Enriches findings with contextual intelligence: known API identification, benign command recognition, cross-file correlation
+6. Detects active mitigations: telemetry opt-out env vars, preference files, disabled plugins
+7. Assigns final severity (CRITICAL/MITIGATED/WARNING/NOTICE/INFO) based on pattern + context + mitigation state
+8. Outputs findings sorted by severity with per-finding recommendations and contextual notes
 
 No AST parsing, no external dependencies, no network calls. The tool reads local files and prints results.
 

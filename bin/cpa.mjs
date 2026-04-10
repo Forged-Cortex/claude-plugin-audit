@@ -52,19 +52,31 @@ if (flags.help) {
   Usage: cpa [options] [plugin-name...]
 
   Options:
-    --fix               Remediate findings (delete tracking, set opt-outs)
+    --fix               Find issues and fix them (interactive remediation)
     --json              Machine-readable JSON output
-    --verbose, -V       Include INFO-level findings
+    --verbose, -V       Show all findings including NOTICE and INFO
     --plugin-dir <dir>  Override plugin cache directory
     --no-color          Disable ANSI colors
     --help, -h          Show this help message
     --version, -v       Show version
 
+  Severity Levels:
+    CRITICAL    Active threat — data exfiltration, prompt injection
+    MITIGATED   Was critical, remediated by an existing control
+    WARNING     Needs your evaluation — may or may not be a problem
+    NOTICE      Noted for completeness, probably benign (--verbose)
+    INFO        Normal plugin behavior, background detail (--verbose)
+
+  Exit Codes:
+    0           No unmitigated critical findings
+    1           Unmitigated critical findings present
+
   Examples:
     npx claude-plugin-audit              Audit all installed plugins
     npx claude-plugin-audit vercel       Audit only the Vercel plugin
-    npx claude-plugin-audit --json       JSON output for CI
-    npx claude-plugin-audit --verbose    Show all findings including INFO
+    npx claude-plugin-audit --fix        Audit and remediate interactively
+    npx claude-plugin-audit --json       JSON output for CI pipelines
+    npx claude-plugin-audit --verbose    Show all severity levels
 `);
   process.exit(0);
 }
