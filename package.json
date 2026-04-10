@@ -4,8 +4,8 @@
   "description": "Security audit tool for Claude Code plugins. See what your plugins are really doing. Zero dependencies.",
   "type": "module",
   "bin": {
-    "cpa": "./bin/cpa.mjs",
-    "claude-plugin-audit": "./bin/cpa.mjs"
+    "claude-plugin-audit": "bin/cpa.mjs",
+    "cpa": "bin/cpa.mjs"
   },
   "files": [
     "bin/",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/forged-cortex/claude-plugin-audit"
+    "url": "git+https://github.com/forged-cortex/claude-plugin-audit.git"
   },
   "engines": {
     "node": ">=18.0.0"
