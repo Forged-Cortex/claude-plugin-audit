@@ -6,6 +6,7 @@ import { scanPlugin } from '../lib/source-scanner.mjs';
 import { reportTerminal, reportJson } from '../lib/reporter.mjs';
 import { remediate } from '../lib/remediate.mjs';
 import { loadIgnoreRules } from '../lib/ignore.mjs';
+import { detectMitigations } from '../lib/mitigations.mjs';
 import { disableColor } from '../lib/utils.mjs';
 
 // ─── Argument Parsing (no dependency needed) ────────────────────────────────
@@ -39,7 +40,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (flags.version) {
-  console.log('claude-plugin-audit v1.2.0');
+  console.log('claude-plugin-audit v1.3.0');
   process.exit(0);
 }
 
@@ -109,6 +110,16 @@ for (const plugin of plugins) {
     f => !ignoreRules.shouldIgnore(f.id, f.plugin, f.file)
   );
 
+  // Detect and annotate mitigations
+  const mitChecker = detectMitigations(plugin);
+  for (const finding of allFindings) {
+    const { mitigated, reason } = mitChecker.check(finding);
+    if (mitigated) {
+      finding.mitigated = true;
+      finding.mitigationReason = reason;
+    }
+  }
+
   results.push({
     plugin,
     hookEvents,
@@ -127,8 +138,8 @@ if (flags.json) {
   console.log(`  Completed in ${elapsed}ms\n`);
 }
 
-// Exit handling
-const hasCritical = results.some(r => r.findings.some(f => f.severity === 'critical'));
+// Exit handling — only exit 1 for unmitigated criticals
+const hasCritical = results.some(r => r.findings.some(f => f.severity === 'critical' && !f.mitigated));
 
 if (flags.fix) {
   remediate(results).then(() => process.exit(hasCritical ? 1 : 0));
