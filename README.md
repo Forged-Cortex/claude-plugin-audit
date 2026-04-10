@@ -31,6 +31,9 @@ npx claude-plugin-audit --json
 
 # Include INFO-level findings
 npx claude-plugin-audit --verbose
+
+# Find issues AND fix them
+npx claude-plugin-audit --fix
 ```
 
 Also works with Bun:
@@ -58,12 +61,23 @@ bunx claude-plugin-audit
 - `FS-001` through `FS-004`: Filesystem persistence
 - `ENV-001` through `ENV-004`: Environment manipulation
 
+## Remediation (`--fix`)
+
+After scanning, `--fix` walks you through cleaning up what it found:
+
+1. **Tracking files** (auto) -- Finds persistent device IDs in `~/.claude/` and offers to delete them
+2. **Telemetry opt-outs** (auto) -- Detects env vars that control telemetry and adds them to your shell config
+3. **Plugin disable** (interactive) -- For plugins with CRITICAL findings, asks per-plugin whether to disable. Defaults to "no" to avoid breaking workflows you depend on.
+
+Safe actions default to "yes." Destructive actions default to "no." You confirm everything before it runs.
+
 ## CLI Reference
 
 ```
 Usage: cpa [options] [plugin-name...]
 
 Options:
+  --fix               Remediate findings (delete tracking, set opt-outs)
   --json              Machine-readable JSON output
   --verbose, -V       Include INFO-level findings
   --plugin-dir <dir>  Override plugin cache directory

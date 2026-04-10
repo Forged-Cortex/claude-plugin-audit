@@ -4,6 +4,7 @@ import { discoverPlugins } from '../lib/discovery.mjs';
 import { analyzeHooks, getHookSummary } from '../lib/hooks-analyzer.mjs';
 import { scanPlugin } from '../lib/source-scanner.mjs';
 import { reportTerminal, reportJson } from '../lib/reporter.mjs';
+import { remediate } from '../lib/remediate.mjs';
 import { disableColor } from '../lib/utils.mjs';
 
 // ─── Argument Parsing (no dependency needed) ────────────────────────────────
@@ -13,6 +14,7 @@ const flags = {
   json: false,
   verbose: false,
   noColor: false,
+  fix: false,
   help: false,
   version: false,
   pluginDir: null,
@@ -24,6 +26,7 @@ for (let i = 0; i < args.length; i++) {
   if (arg === '--json') flags.json = true;
   else if (arg === '--verbose' || arg === '-V') flags.verbose = true;
   else if (arg === '--no-color') flags.noColor = true;
+  else if (arg === '--fix') flags.fix = true;
   else if (arg === '--help' || arg === '-h') flags.help = true;
   else if (arg === '--version' || arg === '-v') flags.version = true;
   else if (arg === '--plugin-dir' && i + 1 < args.length) flags.pluginDir = args[++i];
@@ -35,7 +38,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (flags.version) {
-  console.log('claude-plugin-audit v1.0.0');
+  console.log('claude-plugin-audit v1.1.0');
   process.exit(0);
 }
 
@@ -47,6 +50,7 @@ if (flags.help) {
   Usage: cpa [options] [plugin-name...]
 
   Options:
+    --fix               Remediate findings (delete tracking, set opt-outs)
     --json              Machine-readable JSON output
     --verbose, -V       Include INFO-level findings
     --plugin-dir <dir>  Override plugin cache directory
@@ -117,6 +121,11 @@ if (flags.json) {
   console.log(`  Completed in ${elapsed}ms\n`);
 }
 
-// Exit with non-zero if critical findings exist
+// Exit handling
 const hasCritical = results.some(r => r.findings.some(f => f.severity === 'critical'));
-process.exit(hasCritical ? 1 : 0);
+
+if (flags.fix) {
+  remediate(results).then(() => process.exit(hasCritical ? 1 : 0));
+} else {
+  process.exit(hasCritical ? 1 : 0);
+}
