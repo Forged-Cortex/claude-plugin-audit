@@ -40,7 +40,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (flags.version) {
-  console.log('claude-plugin-audit v1.3.0');
+  console.log('claude-plugin-audit v1.4.0');
   process.exit(0);
 }
 
