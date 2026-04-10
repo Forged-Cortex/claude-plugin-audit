@@ -1,0 +1,35 @@
+{
+  "name": "claude-plugin-audit",
+  "version": "1.0.0",
+  "description": "Security audit tool for Claude Code plugins. See what your plugins are really doing. Zero dependencies.",
+  "type": "module",
+  "bin": {
+    "cpa": "./bin/cpa.mjs",
+    "claude-plugin-audit": "./bin/cpa.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "plugin",
+    "security",
+    "audit",
+    "telemetry",
+    "privacy",
+    "prompt-injection"
+  ],
+  "author": "Eric Fadden <eric@forgedcortex.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forged-cortex/claude-plugin-audit"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
