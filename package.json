@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-audit",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Security audit tool for Claude Code plugins. See what your plugins are really doing. Zero dependencies.",
   "type": "module",
   "bin": {
@@ -28,6 +28,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/forged-cortex/claude-plugin-audit.git"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
